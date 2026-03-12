@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+  <title>Openclaw 安全检测工具</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #0D1117;
+      color: #E6EDF3;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    
+    /* 顶部标题栏 */
+    .header {
+      background: linear-gradient(180deg, #161B22 0%, #0D1117 100%);
+      padding: 16px 24px;
+      border-bottom: 1px solid #30363D;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .logo {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #00CED1, #1E90FF);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #E6EDF3;
+    }
+    
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #238636;
+      animation: pulse 2s infinite;
+    }
+    
+    .status-dot.danger {
+      background: #F85149;
+    }
+    
+    .status-dot.warning {
+      background: #D29922;
+    }
+    
+    .status-text {
+      font-size: 13px;
+      color: #8B949E;
+    }
+    
+    /* 主内容区域 - 左右分栏 */
+    .main-content {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+    
+    /* 左侧面板 */
+    .left-panel {
+      width: 320px;
+      min-width: 280px;
+      background: #161B22;
+      border-right: 1px solid #30363D;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    
+    /* 右侧终端面板 */
+    .right-panel {
+      flex: 1;
+      background: #0D1117;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    .terminal-header {
+      background: #161B22;
+      padding: 12px 16px;
+      border-bottom: 1px solid #30363D;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .terminal-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: #8B949E;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .terminal-content {
+      flex: 1;
+      background: #0D1117;
+      padding: 16px;
+      overflow-y: auto;
+      font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    
+    .log-entry {
+      padding: 4px 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    
+    .log-entry .timestamp {
+      color: #484F58;
+      flex-shrink: 0;
+    }
+    
+    .log-entry.info .message { color: #8B949E; }
+    .log-entry.success .message { color: #3FB950; }
+    .log-entry.warning .message { color: #D29922; }
+    .log-entry.error .message { color: #F85149; }
+    
+    /* 时间线 */
+    .timeline-section {
+      margin-bottom: 24px;
+    }
+    
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #8B949E;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+    }
+    
+    .timeline {
+      position: relative;
+      padding-left: 24px;
+    }
+    
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #30363D;
+    }
+    
+    .timeline-item {
+      position: relative;
+      padding-bottom: 20px;
+    }
+    
+    .timeline-item:last-child {
+      padding-bottom: 0;
+    }
+    
+    .timeline-dot {
+      position: absolute;
+      left: -18px;
+      top: 4px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #30363D;
+      border: 2px solid #161B22;
+    }
+    
+    .timeline-item.completed .timeline-dot {
+      background: #238636;
+      box-shadow: 0 0 8px rgba(35, 134, 54, 0.4);
+    }
+    
+    .timeline-item.active .timeline-dot {
+      background: #00CED1;
+      box-shadow: 0 0 12px rgba(0, 206, 209, 0.6);
+      animation: pulse 1.5s infinite;
+    }
+    
+    .timeline-item.found .timeline-dot {
+      background: #F85149;
+      box-shadow: 0 0 8px rgba(248, 81, 73, 0.4);
+    }
+    
+    .timeline-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: #E6EDF3;
+      margin-bottom: 4px;
+    }
+    
+    .timeline-desc {
+      font-size: 12px;
+      color: #8B949E;
+    }
+    
+    /* 按钮 */
+    .button-section {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .btn {
+      padding: 14px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    /* 青色霓虹扫描按钮 */
+    .btn-scan {
+      background: linear-gradient(135deg, #00CED1 0%, #00BFFF 50%, #1E90FF 100%);
+      color: #FFFFFF;
+      box-shadow: 
+        0 0 20px rgba(0, 206, 209, 0.6),
+        0 0 40px rgba(0, 206, 209, 0.4),
+        0 0 60px rgba(0, 206, 209, 0.2);
+      animation: cyan-glow 2s ease-in-out infinite;
+    }
+    
+    .btn-scan:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 
+        0 0 30px rgba(0, 206, 209, 0.8),
+        0 0 50px rgba(0, 206, 209, 0.6),
+        0 0 70px rgba(0, 206, 209, 0.4);
+    }
+    
+    .btn-scan.scanning {
+      animation: scanning 1s ease-in-out infinite;
+    }
+    
+    /* 卸载按钮 */
+    .btn-uninstall {
+      background: linear-gradient(135deg, #F85149 0%, #DA3633 100%);
+      color: #FFFFFF;
+      box-shadow: 0 4px 12px rgba(248, 81, 73, 0.3);
+    }
+    
+    .btn-uninstall:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(248, 81, 73, 0.4);
+    }
+    
+    /* 等待提示 */
+    .waiting-indicator {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px;
+      background: rgba(0, 206, 209, 0.1);
+      border: 1px solid rgba(0, 206, 209, 0.3);
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+    
+    .waiting-indicator.visible {
+      display: flex;
+    }
+    
+    .waiting-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(0, 206, 209, 0.3);
+      border-top-color: #00CED1;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    .waiting-text {
+      font-size: 13px;
+      color: #00CED1;
+    }
+    
+    .waiting-countdown {
+      font-weight: 600;
+      color: #00CED1;
+    }
+    
+    /* 安全状态 */
+    .security-status {
+      background: #21262D;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    
+    .security-score {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    
+    .score-label {
+      font-size: 12px;
+      color: #8B949E;
+    }
+    
+    .score-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #238636;
+    }
+    
+    .score-value.danger { color: #F85149; }
+    .score-value.warning { color: #D29922; }
+    
+    .progress-bar {
+      height: 6px;
+      background: #30363D;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #238636, #3FB950);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    
+    .progress-fill.danger {
+      background: linear-gradient(90deg, #F85149, #DA3633);
+    }
+    
+    .progress-fill.warning {
+      background: linear-gradient(90deg, #D29922, #E3B341);
+    }
+    
+    /* 风险列表 */
+    .risks-section {
+      margin-top: 20px;
+    }
+    
+    .risk-item {
+      background: #21262D;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      border-left: 3px solid #30363D;
+    }
+    
+    .risk-item.critical {
+      border-left-color: #F85149;
+    }
+    
+    .risk-item.warning {
+      border-left-color: #D29922;
+    }
+    
+    .risk-item.info {
+      border-left-color: #58A6FF;
+    }
+    
+    .risk-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    
+    .risk-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: #E6EDF3;
+    }
+    
+    .risk-level {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+    
+    .risk-level.critical {
+      background: rgba(248, 81, 73, 0.2);
+      color: #F85149;
+    }
+    
+    .risk-level.warning {
+      background: rgba(210, 153, 34, 0.2);
+      color: #D29922;
+    }
+    
+    .risk-level.info {
+      background: rgba(88, 166, 255, 0.2);
+      color: #58A6FF;
+    }
+    
+    .risk-desc {
+      font-size: 12px;
+      color: #8B949E;
+    }
+    
+    /* 动画 */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    @keyframes cyan-glow {
+      0%, 100% {
+        box-shadow: 
+          0 0 20px rgba(0, 206, 209, 0.6),
+          0 0 40px rgba(0, 206, 209, 0.4),
+          0 0 60px rgba(0, 206, 209, 0.2);
+      }
+      50% {
+        box-shadow: 
+          0 0 30px rgba(0, 206, 209, 0.8),
+          0 0 50px rgba(0, 206, 209, 0.6),
+          0 0 70px rgba(0, 206, 209, 0.4);
+      }
+    }
+    
+    @keyframes scanning {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    
+    /* 清空日志按钮 */
+    .btn-clear {
+      background: transparent;
+      border: 1px solid #30363D;
+      color: #8B949E;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    
+    .btn-clear:hover {
+      background: #21262D;
+      color: #E6EDF3;
+    }
+    
+    /* Toast 通知 */
+    .toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 1000;
+      opacity: 0;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+    }
+    
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .toast.success {
+      background: #238636;
+      color: #FFFFFF;
+    }
+    
+    .toast.error {
+      background: #F85149;
+      color: #FFFFFF;
+    }
+    
+    .toast.warning {
+      background: #D29922;
+      color: #000000;
+    }
+
+    /* 终端日志关键字高亮（橙色） */
+    .log-accent {
+      color: #F0883E;
+      font-weight: 500;
+    }
+
+    /* 风险详情模态框 */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(13, 17, 23, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+    
+    .modal.show {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .modal-content {
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow: hidden;
+      transform: scale(0.95);
+      transition: transform 0.3s ease;
+    }
+    
+    .modal.show .modal-content {
+      transform: scale(1);
+    }
+    
+    .modal-header {
+      padding: 20px 20px 0 20px;
+      border-bottom: 1px solid #30363D;
+    }
+    
+    .modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #E6EDF3;
+      margin-bottom: 12px;
+    }
+    
+    .modal-risk-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .modal-risk-level {
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-weight: 500;
+    }
+    
+    .modal-risk-level.critical {
+      background: rgba(248, 81, 73, 0.2);
+      color: #F85149;
+    }
+    
+    .modal-risk-level.warning {
+      background: rgba(210, 153, 34, 0.2);
+      color: #D29922;
+    }
+    
+    .modal-risk-level.info {
+      background: rgba(88, 166, 255, 0.2);
+      color: #58A6FF;
+    }
+    
+    .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      max-height: 50vh;
+    }
+    
+    .modal-section {
+      margin-bottom: 20px;
+    }
+    
+    .modal-section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #8B949E;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .modal-section-content {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #E6EDF3;
+      background: #0D1117;
+      padding: 12px;
+      border-radius: 6px;
+      border-left: 3px solid #30363D;
+    }
+    
+    .modal-footer {
+      padding: 16px 20px;
+      border-top: 1px solid #30363D;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+    
+    .modal-btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+    
+    .modal-btn-primary {
+      background: #238636;
+      color: #FFFFFF;
+    }
+    
+    .modal-btn-primary:hover {
+      background: #2EA043;
+    }
+    
+    .modal-btn-secondary {
+      background: #21262D;
+      color: #E6EDF3;
+      border: 1px solid #30363D;
+    }
+    
+    .modal-btn-secondary:hover {
+      background: #30363D;
+    }
+    
+    /* 可点击的风险项 */
+    .risk-item {
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .risk-item:hover {
+      background: #2D3139;
+      transform: translateX(4px);
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- 顶部标题栏 -->
+    <header class="header">
+      <div class="header-title">
+        <div class="logo">🛡️</div>
+        <h1>Openclaw 安全检测工具</h1>
+      </div>
+      <div class="status-indicator">
+        <span class="status-dot ready" id="statusDot"></span>
+        <span class="status-text" id="statusText">系统安全</span>
+      </div>
+    </header>
+    
+    <!-- 主内容区域 -->
+    <div class="main-content">
+      <!-- 左侧面板 -->
+      <div class="left-panel">
+        <!-- 安全状态 -->
+        <div class="security-status">
+          <div class="security-score">
+            <span class="score-label">安全评分</span>
+            <span class="score-value" id="scoreValue">100</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width: 100%"></div>
+          </div>
+        </div>
+        
+        <!-- 时间线 -->
+        <div class="timeline-section">
+          <h3 class="section-title">扫描进度</h3>
+          <div class="timeline" id="timeline">
+            <div class="timeline-item" data-step="0">
+              <span class="timeline-dot"></span>
+              <div class="timeline-title">安装检测</div>
+              <div class="timeline-desc">等待开始...</div>
+            </div>
+            <div class="timeline-item" data-step="1">
+              <span class="timeline-dot"></span>
+              <div class="timeline-title">进程扫描</div>
+              <div class="timeline-desc">等待开始...</div>
+            </div>
+            <div class="timeline-item" data-step="2">
+              <span class="timeline-dot"></span>
+              <div class="timeline-title">网络检测</div>
+              <div class="timeline-desc">等待开始...</div>
+            </div>
+            <div class="timeline-item" data-step="3">
+              <span class="timeline-dot"></span>
+              <div class="timeline-title">服务检测</div>
+              <div class="timeline-desc">等待开始...</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 风险列表 -->
+        <div class="risks-section" id="risksSection" style="display: none;">
+          <h3 class="section-title">发现的风险</h3>
+          <div id="risksList"></div>
+        </div>
+        
+        <!-- 按钮区域 -->
+        <div class="button-section">
+          <button class="btn btn-scan" id="btnScan">
+            <span>🔍 一键扫描</span>
+          </button>
+          <button class="btn btn-uninstall" id="btnUninstall">
+            <span>🗑️ 一键卸载</span>
+          </button>
+          
+          <!-- 等待提示 -->
+          <div class="waiting-indicator" id="waitingIndicator">
+            <div class="waiting-spinner"></div>
+            <span class="waiting-text">等待响应</span>
+            <span class="waiting-countdown" id="waitingCountdown">0s</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 右侧终端面板 -->
+      <div class="right-panel">
+        <div class="terminal-header">
+          <div class="terminal-title">
+            <span>📋</span>
+            <span>终端日志</span>
+          </div>
+          <button class="btn-clear" id="btnClearLog">清空日志</button>
+        </div>
+        <div class="terminal-content" id="terminalContent">
+          <div class="log-entry info">
+            <span class="timestamp">[系统]</span>
+            <span class="message">等待扫描...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Toast 通知 -->
+  <div class="toast" id="toast"></div>
+  
+  <!-- 风险详情模态框 -->
+  <div class="modal" id="riskModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle">风险详情</div>
+        <div class="modal-risk-info">
+          <span class="risk-name" id="modalRiskName"></span>
+          <span class="modal-risk-level" id="modalRiskLevel"></span>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="modal-section">
+          <div class="modal-section-title">风险描述</div>
+          <div class="modal-section-content" id="modalDescription"></div>
+        </div>
+        <div class="modal-section">
+          <div class="modal-section-title">详细信息</div>
+          <div class="modal-section-content" id="modalDetail"></div>
+        </div>
+        <div class="modal-section">
+          <div class="modal-section-title">修复建议</div>
+          <div class="modal-section-content" id="modalFixDescription"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-secondary" id="modalClose">关闭</button>
+        <button class="modal-btn modal-btn-primary" id="modalFix">一键修复</button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="./renderer.js"></script>
+</body>
+</html>

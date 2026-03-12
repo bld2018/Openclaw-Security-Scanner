@@ -1,0 +1,20 @@
+{
+  "name": "openclaw-security-scanner",
+  "version": "1.0.0",
+  "description": "Openclaw安全检查开源工具",
+  "main": "main.js",
+  "scripts": {
+    "start": "env -u ELECTRON_RUN_AS_NODE electron .",
+    "test:ui": "env -u ELECTRON_RUN_AS_NODE electron test_ui_rendering.js",
+    "build": "electron-builder --mac"
+  },
+  "author": "Openclaw",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {
+    "electron-log": "^5.0.0"
+  }
+}
