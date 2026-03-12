@@ -2270,11 +2270,19 @@ async function performScan() {
 // 实时日志传递函数
 function sendTerminalLog(message, type = 'info') {
   if (mainWindow && mainWindow.webContents) {
-    mainWindow.webContents.send('terminal-log', {
-      message: message,
-      type: type,
-      timestamp: new Date().toISOString()
-    });
+    try {
+      mainWindow.webContents.send('terminal-log', {
+        message: message,
+        type: type,
+        timestamp: new Date().toISOString()
+      });
+    } catch (e) {
+      // 如果发送失败，记录到文件日志
+      originalLogInfo('日志发送失败:', e.message, '日志内容:', message);
+    }
+  } else {
+    // mainWindow 未准备好，记录到文件日志
+    originalLogInfo('MainWindow not ready, log:', message);
   }
 }
 
