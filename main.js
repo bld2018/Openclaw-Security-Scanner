@@ -616,7 +616,7 @@ function removeOpenclawServices() {
       }
     }
     
-    log.info(`移除服务完成: ${removedServices.length} 个，删除启动文件: ${removedFiles.length} 个`);
+    log.info(`[✓] 已移除 ${removedServices.length} 个服务，删除 ${removedFiles.length} 个启动文件`);
     return { success: true, removed: removedServices, removedFiles };
   } catch (error) {
     log.error('移除系统服务失败:', error);
@@ -782,7 +782,7 @@ async function uninstallOpenclawCli() {
     // 2. 扫描所有 npm 全局 bin 目录
     log.info('[i] 扫描 npm 全局 bin 目录...');
     const binDirs = getNpmGlobalBinDirs();
-    log.info(`[i] 找到 ${binDirs.length} 个可能的 bin 目录`);
+    let foundAnyFile = false;
     
     for (const dir of binDirs) {
       const files = findOpenclawFilesInDir(dir);
@@ -790,8 +790,13 @@ async function uninstallOpenclawCli() {
         if (!cliPaths.includes(f.path)) {
           cliPaths.push(f.path);
           log.info(`[✓] 在 ${dir} 找到: ${path.basename(f.path)}`);
+          foundAnyFile = true;
         }
       }
+    }
+    
+    if (!foundAnyFile) {
+      log.info('[✓] 未找到 Openclaw 相关文件');
     }
 
     // 3. 删除所有找到的 CLI 文件
@@ -803,7 +808,6 @@ async function uninstallOpenclawCli() {
         if (!fs.existsSync(cliPath)) continue;
         
         const stat = fs.lstatSync(cliPath);
-        log.info(`[i] 处理: ${cliPath} (${stat.isSymbolicLink() ? '软链接' : stat.isDirectory() ? '目录' : '文件'})`);
         
         if (stat.isSymbolicLink()) {
           const realPath = fs.readlinkSync(cliPath);
@@ -829,6 +833,13 @@ async function uninstallOpenclawCli() {
       }
     }
 
+    // 输出删除结果
+    if (deletedCount > 0 || needSudo.length > 0) {
+      log.info(`[✓] 已删除 ${deletedCount} 个 CLI 文件`);
+    } else if (cliPaths.length === 0) {
+      log.info('[✓] 未找到 Openclaw CLI 文件');
+    }
+
     // 4. 使用 sudo 删除需要权限的文件
     if (needSudo.length > 0) {
       log.info(`[i] 需要管理员权限删除 ${needSudo.length} 个文件，将弹出密码框...`);
@@ -843,18 +854,32 @@ async function uninstallOpenclawCli() {
     // 5. 尝试卸载 npm 包
     log.info('[i] 尝试卸载 npm 全局包...');
     const pkgNames = ['openclaw-cn', 'openclaw', '@qingchencloud/openclaw-zh', '@openclaw/openclaw'];
+    let uninstalledAny = false;
+    
     for (const name of pkgNames) {
       try {
-        // 先尝试普通卸载
-        safeExecFile('npm', ['uninstall', '-g', name], { timeout: 15000 });
-        log.info(`    ✓ 已卸载 npm 包: ${name}`);
+        // 先检查包是否存在
+        const listResult = safeExecFile('npm', ['list', '-g', '--depth=0'], { timeout: 5000 });
+        if (listResult.includes(name)) {
+          // 包存在，执行卸载
+          safeExecFile('npm', ['uninstall', '-g', name], { timeout: 15000 });
+          log.info(`    ✓ 已卸载 npm 包: ${name}`);
+          uninstalledAny = true;
+        }
       } catch (e) {
-        log.info(`    npm uninstall ${name}: ${e.message}`);
+        // 包不存在，忽略
       }
+    }
+    
+    if (uninstalledAny) {
+      log.info('[✓] 已卸载 npm 全局包');
+    } else {
+      log.info('[✓] 未找到 Openclaw npm 包');
     }
 
     // 6. 查找并删除 npm 全局 node_modules 中的 openclaw 目录
     log.info('[i] 清理 npm 全局 node_modules...');
+    let cleanedAny = false;
     try {
       const npmRoot = safeExecFile('npm', ['root', '-g'], { timeout: 5000 });
       if (npmRoot && npmRoot.trim()) {
@@ -870,6 +895,7 @@ async function uninstallOpenclawCli() {
           if (fs.existsSync(pkgDir)) {
             try {
               fs.rmSync(pkgDir, { recursive: true, force: true });
+              cleanedAny = true;
               log.info(`    ✓ 已删除: ${pkgDir}`);
               deletedCount++;
             } catch (e) {
@@ -882,6 +908,12 @@ async function uninstallOpenclawCli() {
       }
     } catch (e) {
       log.warn('    清理 npm modules 失败:', e.message);
+    }
+    
+    if (cleanedAny) {
+      log.info('[✓] 已删除 npm 全局模块中的 Openclaw 目录');
+    } else {
+      log.info('[✓] 未找到 Openclaw 全局模块');
     }
 
     // 7. 清理 npm 缓存中的 openclaw 相关内容
@@ -1031,7 +1063,28 @@ function scanOpenclawCli() {
       }
     }
 
-    // 3. npm 包检查: npm list -g --depth=0 | grep openclaw
+    // 3. npm bin 目录扫描
+    log.info('[i] 扫描 npm 全局 bin 目录...');
+    const binDirs = getNpmGlobalBinDirs();
+    let foundAnyFile = false;
+    
+    for (const dir of binDirs) {
+      const files = findOpenclawFilesInDir(dir);
+      for (const f of files) {
+        if (!cliInfo.path || !cliInfo.path.includes(f.path)) {
+          log.info(`[✓] bin 目录文件: ${f.path}`);
+          foundAnyFile = true;
+        }
+      }
+    }
+    
+    if (foundAnyFile) {
+      log.info('[✓] 已找到 Openclaw 相关文件');
+    } else {
+      log.info('[✓] 未找到 Openclaw 相关文件');
+    }
+
+    // 4. npm 包检查: npm list -g --depth=0 | grep openclaw
     try {
       const npmList = safeExecFile('npm', ['list', '-g', '--depth=0'], { timeout: 5000 });
       const npmMatch = npmList.match(/openclaw[^@\n]*@(\S+)/i);
