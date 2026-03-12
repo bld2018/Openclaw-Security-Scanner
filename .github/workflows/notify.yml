@@ -1,22 +1,25 @@
-name: Notify Feishu
+name: Test Feishu Notification
 
 on:
+  workflow_dispatch:  # 允许手动触发
   push:
-    branches: [ "main" ]  # 监听 main 分支的推送
+    branches: [ main ]
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Send notification to Feishu
+      - name: Send test message to Feishu
         env:
-          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK_URL }}  # 把 URL 存在仓库 Secrets 里
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK_URL }}
         run: |
+          echo "开始发送飞书消息..."
           curl -X POST -H "Content-Type: application/json" \
             -d '{
               "msg_type": "text",
               "content": {
-                "text": "🚀 有新的代码推送到了 ${{ github.repository }} 仓库！\n👤 提交者：${{ github.actor }}\n📝 提交信息：${{ github.event.head_commit.message }}"
+                "text": "🧪 这是一条测试消息来自 GitHub Actions\n仓库: ${{ github.repository }}\n触发事件: ${{ github.event_name }}"
               }
             }' \
             $FEISHU_WEBHOOK
+          echo "发送完成，请检查飞书。"
