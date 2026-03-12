@@ -396,7 +396,48 @@ async function uninstallOpenclaw() {
   }
 }
 
-// 终止Openclaw进程
+// 查找进程树的根（祖宗进程）
+function findProcessRoot(pid) {
+  try {
+    let currentPid = pid;
+    let lastPid = pid;
+    
+    // 一直往上找，直到父进程是 1（launchd）
+    while (true) {
+      try {
+        // 获取当前进程的父进程ID
+        const ppidResult = safeExecFile('ps', ['-p', currentPid.toString(), '-o', 'ppid='], { timeout: 3000 });
+        const parentPid = parseInt(ppidResult.trim(), 10);
+        
+        // 如果父进程是 1，说明当前进程就是根进程
+        if (parentPid === 1) {
+          return currentPid;
+        }
+        
+        // 如果无法获取父进程或已经是 0，停止
+        if (isNaN(parentPid) || parentPid === 0) {
+          return lastPid;
+        }
+        
+        // 继续往上找
+        lastPid = currentPid;
+        currentPid = parentPid;
+        
+        // 防止无限循环，设置最大深度限制
+        if (currentPid === lastPid) {
+          return currentPid;
+        }
+      } catch (e) {
+        // 出错时返回上一个有效的PID
+        return lastPid;
+      }
+    }
+  } catch (e) {
+    return pid; // 出错时返回原始PID
+  }
+}
+
+// 终止Openclaw进程（智能版本：找到并终止根进程）
 function killOpenclawProcesses() {
   try {
     log.info('开始终止Openclaw进程...');
@@ -407,6 +448,8 @@ function killOpenclawProcesses() {
     
     // 首先获取 Openclaw 相关进程列表
     let targetPids = [];
+    let targetCommands = {};
+    
     try {
       const psResult = safeExecFile('ps', ['-eo', 'pid,comm'], { timeout: 3000 });
       const lines = psResult.trim().split('\n').filter(l => l.trim());
@@ -420,6 +463,7 @@ function killOpenclawProcesses() {
         // 排除当前进程
         if (pid !== currentPid && !isNaN(pid)) {
           targetPids.push(pid);
+          targetCommands[pid] = comm;
           log.info(`  发现目标进程: PID=${pid}, 命令=${comm}`);
         }
       }
@@ -433,27 +477,59 @@ function killOpenclawProcesses() {
       return { success: true, killed: 0, message: '没有发现运行的进程' };
     }
     
-    // 逐个终止目标进程
-    let killedCount = 0;
+    // 找到所有根进程（去重）
+    log.info('查找进程树的根进程...');
+    const rootPids = [];
+    const rootPidMap = {};
+    
     for (const pid of targetPids) {
+      const rootPid = findProcessRoot(pid);
+      if (!rootPids.includes(rootPid)) {
+        rootPids.push(rootPid);
+        rootPidMap[rootPid] = pid; // 记录原始的子进程PID
+      }
+    }
+    
+    // 显示找到的根进程
+    log.info(`找到 ${rootPids.length} 个根进程:`);
+    for (const rootPid of rootPids) {
+      const originalPid = rootPidMap[rootPid];
+      const command = targetCommands[originalPid] || '未知命令';
+      log.info(`  根进程 PID=${rootPid}, 来自子进程 ${originalPid}: ${command}`);
+      
+      // 获取根进程的详细信息
       try {
-        process.kill(pid, 'SIGTERM');
-        log.info(`  已发送终止信号到进程 ${pid}`);
+        const commResult = safeExecFile('ps', ['-p', rootPid.toString(), '-o', 'comm='], { timeout: 3000 });
+        const fullComm = commResult.trim();
+        log.info(`    主程序: ${fullComm}`);
+      } catch (e) {
+        // 忽略
+      }
+    }
+    
+    // 终止所有根进程
+    let killedCount = 0;
+    for (const rootPid of rootPids) {
+      if (rootPid === currentPid) continue; // 不杀自己
+      
+      try {
+        // 先尝试温和终止
+        process.kill(rootPid, 'SIGTERM');
+        log.info(`  已发送终止信号到根进程 ${rootPid}`);
         killedCount++;
       } catch (e) {
         // 如果温和终止失败，尝试强制终止
         try {
-          process.kill(pid, 'SIGKILL');
-          log.info(`  已强制终止进程 ${pid}`);
+          process.kill(rootPid, 'SIGKILL');
+          log.info(`  已强制终止根进程 ${rootPid}`);
           killedCount++;
         } catch (e2) {
-          log.warn(`  无法终止进程 ${pid}`);
+          log.warn(`  无法终止根进程 ${rootPid}`);
         }
       }
     }
     
     // 等待进程退出
-    // 给系统一点时间回收进程
     sleepSync(1500);
     
     // 验证是否还有进程在运行
@@ -475,14 +551,14 @@ function killOpenclawProcesses() {
     }
     
     if (remainingCount === 0) {
-      log.info(`成功终止所有 Openclaw 进程 (${killedCount} 个)`);
+      log.info(`成功终止所有 Openclaw 进程 (${killedCount} 个根进程)`);
       return { success: true, killed: killedCount };
     } else {
-      log.warn(`仍有 ${remainingCount} 个进程在运行`);
+      log.warn(`仍有 ${remainingCount} 个子进程在运行`);
       return { 
-        success: true, // 改为 true，因为已经尽力终止了
+        success: true,
         killed: killedCount,
-        warning: `仍有 ${remainingCount} 个进程在运行，可能需要管理员权限`
+        warning: `仍有 ${remainingCount} 个子进程在运行，可能需要管理员权限`
       };
     }
   } catch (error) {
