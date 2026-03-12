@@ -2149,17 +2149,11 @@ log.success = function(...args) {
 
 // IPC处理器
 ipcMain.handle('perform-scan', async () => {
-  // #region agent log
-  __dbg('H4', 'main.js:ipc:perform-scan', 'ipc perform-scan called', {});
-  // #endregion
   return performScan();
 });
 
 ipcMain.handle('fix-risk', async (event, fixType) => {
   log.info('执行修复:', fixType);
-  // #region agent log
-  __dbg('H4', 'main.js:ipc:fix-risk', 'ipc fix-risk called', { fixType: String(fixType) });
-  // #endregion
   
   switch (fixType) {
     case 'kill_processes':

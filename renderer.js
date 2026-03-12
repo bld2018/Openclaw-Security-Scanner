@@ -257,14 +257,6 @@ function hideRiskModal() {
 async function performScan() {
   if (isScanning) return;
 
-  // #region agent log
-  __dbg('H2', 'renderer.js:performScan:entry', 'performScan called', {
-    hasElectronAPI: !!window.electronAPI,
-    hasPerformScan: !!(window.electronAPI && window.electronAPI.performScan),
-    btnUninstallDisabled: !!btnUninstall?.disabled,
-  });
-  // #endregion
-
   isScanning = true;
   btnScan.disabled = true;
   btnScan.classList.add('scanning');
@@ -294,14 +286,6 @@ async function performScan() {
     const cliInfo = result.cliInfo;
     const systemInfo = result.systemInfo;
     currentRisks = result.risks || [];
-
-    // #region agent log
-    __dbg('H3', 'renderer.js:performScan:result', 'performScan result received', {
-      cliInfoInstalled: !!cliInfo?.installed,
-      risksCount: currentRisks.length,
-      counts: { critical: result.critical || 0, warning: result.warning || 0, info: result.info || 0, fixable: result.fixable || 0 },
-    });
-    // #endregion
 
     // 更新时间线完成状态
     updateTimeline(3, 'completed', '✓ 扫描完成');
@@ -387,13 +371,7 @@ async function performScan() {
     addTerminalLog('扫描失败: ' + (error?.message || '未知错误'), 'error');
     showToast('扫描失败', 'error');
 
-    // #region agent log
-    __dbg('H4', 'renderer.js:performScan:error', 'performScan threw error', {
-      message: String(error?.message || 'unknown'),
-      hasElectronAPI: !!window.electronAPI,
-    });
-    // #endregion
-  } finally {
+    } finally {
     isScanning = false;
     btnScan.disabled = false;
     btnScan.classList.remove('scanning');
@@ -563,14 +541,6 @@ document.addEventListener('keydown', (e) => {
 // 初始化
 document.addEventListener('DOMContentLoaded', () => {
   initTerminalListener();
-  addTerminalLog('应用已启动，点击“🔍 一键扫描”开始检测', 'info');
-
-  // #region agent log
-  __dbg('H1', 'renderer.js:DOMContentLoaded', 'DOMContentLoaded ran', {
-    hasBtnScan: !!btnScan,
-    hasBtnUninstall: !!btnUninstall,
-    btnUninstallDisabled: !!btnUninstall?.disabled,
-  });
-  // #endregion
+  addTerminalLog('应用已启动，点击"🔍 一键扫描"开始检测', 'info');
 });
 

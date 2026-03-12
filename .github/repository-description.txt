@@ -1,0 +1,139 @@
+GitHub仓库Description写作指南
+
+## 主标题（Repository Description）
+
+简短版本（不超过100字符）：
+🔍 macOS安全检测工具 | 一键扫描和清理Openclaw风险 | Electron开发
+
+推荐版本：
+Openclaw Security Scanner - macOS桌面应用，一键深度扫描和清理Openclaw安全风险，提供详细进程/网络/文件检测报告
+
+## 详细描述（README开头）
+
+### 中文版本：
+```
+Openclaw Security Scanner 是一款专为macOS设计的安全检测工具，采用Electron框架开发。
+
+🔍 核心功能：
+- 一键深度扫描系统中的Openclaw安全风险
+- 智能识别安装状态、运行进程、网络连接和系统服务
+- 提供详细的检测报告，包含进程ID、文件路径、端口信息等
+- 一键修复功能，自动清理残留文件和配置
+- 现代化的极客风格UI设计
+
+⚡ 技术特点：
+- 基于Electron 28构建的跨平台桌面应用
+- 使用系统级命令检测，确保扫描准确性
+- 本地运行，无需网络连接，保护用户隐私
+
+🎯 适用场景：
+- 检测Openclaw相关安全风险
+- 彻底卸载Openclaw并清理残留
+- 监控系统中的可疑进程和服务
+```
+
+### English Version：
+```
+Openclaw Security Scanner is a macOS security detection tool built with Electron framework.
+
+🔍 Key Features:
+- One-click deep scan for Openclaw security risks
+- Intelligent detection of installation status, running processes, network connections, and system services
+- Detailed scan reports with process IDs, file paths, port information, etc.
+- One-click fix to automatically clean up residual files and configurations
+- Modern geek-style UI design
+
+⚡ Technical Highlights:
+- Cross-platform desktop application built on Electron 28
+- System-level command detection for accurate scanning
+- Local operation, no network connection required, protecting user privacy
+
+🎯 Use Cases:
+- Detect Openclaw-related security risks
+- Completely uninstall Openclaw and clean up residues
+- Monitor suspicious processes and services in the system
+```
+
+## 关键词标签（Topics）
+
+electron, security, macos, scanner, openclaw, detection, cleanup, system-tools, desktop-app, cybersecurity, process-monitor, network-analysis
+
+## 语言版本建议
+
+在GitHub仓库设置中：
+- Primary language: 根据目标用户选择中文或英文
+- 在README中提供双语版本
+- 使用中文作为默认描述（如果主要面向中文用户）
+
+## 吸引人的元素
+
+✅ 应该包含：
+- 🔍  emoji图标增加视觉吸引力
+- 清晰的功能描述
+- 技术栈信息（Electron, macOS）
+- 独特的卖点（详细检测报告、一键修复）
+
+❌ 避免使用：
+- 过于技术化的术语
+- 冗长的描述
+- 模糊的表达
+
+## 完整示例
+
+### 最终推荐的Description：
+
+**主标题：**
+```
+🔍 Openclaw Security Scanner | macOS安全检测工具 | 一键扫描清理风险
+```
+
+**详细描述（README.md开头）：**
+```markdown
+# Openclaw Security Scanner
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Electron-28-blue.svg" alt="Electron">
+  <img src="https://img.shields.io/badge/macOS-10.14%2B-silver.svg" alt="macOS">
+  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
+</p>
+
+<p align="center">🛡️ 专为macOS设计的安全检测工具，深度扫描和清理Openclaw相关风险</p>
+
+## ✨ 核心特性
+
+- 🔍 **智能扫描**：一键深度检测系统中的Openclaw安全风险
+- 📊 **详细报告**：提供进程ID、文件路径、网络端口等具体信息
+- 🛡️ **风险分级**：按严重等级分类（严重/警告/信息）
+- ⚡ **一键修复**：自动终止进程、卸载应用、清理残留文件
+- 🎯 **交互式详情**：点击查看每个风险的完整技术细节
+- 🎨 **极客UI**：现代化的深色主题设计
+
+## 🚀 快速开始
+```
+
+## 针对不同平台的描述建议
+
+### 如果发布到中文社区：
+- 使用中文主标题
+- 提供详细的中文README
+- 保留英文版本作为备选
+
+### 如果发布到国际社区：
+- 使用英文主标题
+- 提供详细的英文README
+- 中文版本作为补充
+
+### 最佳实践：
+- 主标题简洁有力
+- README提供双语版本
+- 使用emoji增加可读性
+- 包含清晰的安装和使用步骤
+- 提供截图或GIF演示
+- 包含贡献指南
+
+## SEO优化建议
+
+- 在描述中包含关键词：Openclaw, Security, Scanner, macOS, Electron
+- 使用相关的话题标签
+- 在README中提供详细的描述
+- 包含示例代码和使用场景
