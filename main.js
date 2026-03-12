@@ -1861,13 +1861,13 @@ function checkOpenclawServices() {
     if (services.length > 0) {
       log.info('');
       log.info('┌─────────────────────────────────────┐');
-      log.info('│ 📊 系统服务详情                      │');
+      log.info('│ 📊 系统服务详情                     │');
       services.forEach((service, index) => {
         const levelText = service.level === 'critical' ? '严重' : 
                          service.level === 'warning' ? '警告' : '信息';
-        log.info(`│   ${index + 1}. ${service.name}          │`);
-        log.info(`│      类型: ${service.type.padEnd(23)}│`);
-        log.info(`│      等级: ${levelText.padEnd(23)}│`);
+        log.info(`│   ${index + 1}. ${service.name.substring(0, 12)}              │`);
+        log.info(`│      类型: ${service.type.substring(0, 15).padEnd(15)}         │`);
+        log.info(`│      等级: ${levelText}                     │`);
       });
       log.info('└─────────────────────────────────────┘');
     }
@@ -2199,31 +2199,30 @@ async function performScan() {
       const fixableRisks = risks.filter(r => r.canFix).length;
       const totalActualRisks = criticalRisks + warningRisks + infoRisks;
       
-      // 极客风格日志输出
-      const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+      // 极客风格日志输出（renderer.js会自动添加时间戳，这里不再重复）
       const cliStatus = cliInfo.installed ? '❌ 已安装' : '✅ 已清除';
       
       log.info('');
       log.info('┌─────────────────────────────────────┐');
-      log.info(`│ [${timestamp}] 扫描完成                 │`);
+      log.info('│ 扫描完成                            │');
       log.info('├─────────────────────────────────────┤');
-      log.info('│ 📋 分析结果                          │');
-      log.info(`│   - 严重威胁   : ${criticalRisks} 个                │`);
-      log.info(`│   - 警告风险   : ${warningRisks} 个                │`);
-      log.info(`│   - 信息提示   : ${infoRisks} 个                │`);
-      log.info(`│   - 可修复风险 : ${fixableRisks} 个                │`);
-      log.info(`│   - Openclaw CLI: ${cliStatus.padEnd(20)}│`);
+      log.info('│ 📋 分析结果                         │');
+      log.info(`│   - 严重威胁   : ${criticalRisks} 个              │`);
+      log.info(`│   - 警告风险   : ${warningRisks} 个              │`);
+      log.info(`│   - 信息提示   : ${infoRisks} 个              │`);
+      log.info(`│   - 可修复风险 : ${fixableRisks} 个              │`);
+      log.info(`│   - Openclaw CLI: ${cliStatus}              │`);
       log.info('├─────────────────────────────────────┤');
-      log.info('│ 📊 系统服务扫描                      │');
-      log.info(`│   - 总计发现    : ${serviceInfo.count} 个服务/启动项    │`);
-      log.info(`│   - 严重风险    : ${serviceInfo.critical || 0} 个               │`);
-      log.info(`│   - 警告风险    : ${serviceInfo.warning || 0} 个               │`);
+      log.info('│ 📊 系统服务扫描                     │');
+      log.info(`│   - 总计发现    : ${serviceInfo.count} 个服务/启动项  │`);
+      log.info(`│   - 严重风险    : ${serviceInfo.critical || 0} 个             │`);
+      log.info(`│   - 警告风险    : ${serviceInfo.warning || 0} 个             │`);
       log.info('└─────────────────────────────────────┘');
       
       if (totalActualRisks === 0) {
         log.info('');
         log.info('┌─────────────────────────────────────┐');
-        log.info('│ 🎉 恭喜！未发现任何风险。            │');
+        log.info('│ 🎉 恭喜！未发现任何风险。           │');
         log.info('└─────────────────────────────────────┘');
       }
       

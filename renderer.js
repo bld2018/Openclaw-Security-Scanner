@@ -307,12 +307,7 @@ async function performScan() {
     const info = result.info || 0;
     const fixable = result.fixable || 0;
 
-    addTerminalLog('', 'info');
-    addTerminalLog('扫描完成！分析结果：', 'success');
-    addTerminalLog(`- 严重威胁: ${critical} 个`, critical > 0 ? 'error' : 'success');
-    addTerminalLog(`- 警告风险: ${warning} 个`, warning > 0 ? 'warning' : 'success');
-    addTerminalLog(`- 信息提示: ${info} 个`, 'info');
-    addTerminalLog(`- 可修复风险: ${fixable} 个`, fixable > 0 ? 'warning' : 'success');
+    // 扫描结果已在主进程中输出（ASCII框格式），这里不再重复输出
 
     // 显示 Openclaw CLI 安装信息
     if (cliInfo && cliInfo.installed) {
