@@ -1,0 +1,22 @@
+name: Notify Feishu
+
+on:
+  push:
+    branches: [ "main" ]  # 监听 main 分支的推送
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send notification to Feishu
+        env:
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK_URL }}  # 把 URL 存在仓库 Secrets 里
+        run: |
+          curl -X POST -H "Content-Type: application/json" \
+            -d '{
+              "msg_type": "text",
+              "content": {
+                "text": "🚀 有新的代码推送到了 ${{ github.repository }} 仓库！\n👤 提交者：${{ github.actor }}\n📝 提交信息：${{ github.event.head_commit.message }}"
+              }
+            }' \
+            $FEISHU_WEBHOOK
