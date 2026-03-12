@@ -2046,6 +2046,8 @@ async function performScan() {
     );
     
     const scanPromise = (async () => {
+      // 测试日志发送
+      sendTerminalLog('=== 扫描开始 ===', 'info');
       log.info('开始扫描步骤...');
       
       // 步骤0: 获取系统信息
