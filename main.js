@@ -457,6 +457,10 @@ function killOpenclawProcesses() {
       
       for (const line of lines) {
         if (!/[Oo]penclaw/.test(line)) continue;
+        
+        // 排除本应用自身（双重保护）
+        if (SELF_EXCLUDE_PATTERNS.some(pattern => pattern.test(line))) continue;
+        
         const parts = line.trim().split(/\s+/);
         const pid = parseInt(parts[0], 10);
         const comm = parts.slice(1).join(' ');
@@ -541,6 +545,10 @@ function killOpenclawProcesses() {
       
       for (const line of verifyLines) {
         if (!/[Oo]penclaw/.test(line)) continue;
+        
+        // 排除本应用自身（双重保护）
+        if (SELF_EXCLUDE_PATTERNS.some(pattern => pattern.test(line))) continue;
+        
         const parts = line.trim().split(/\s+/);
         const pid = parseInt(parts[0], 10);
         if (pid !== currentPid && !isNaN(pid)) {
