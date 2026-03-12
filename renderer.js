@@ -85,8 +85,8 @@ function addTerminalLog(message, type = 'info') {
   if (/openclaw/i.test(safeMessage)) {
     safeMessage = `<span class="log-accent">${safeMessage}</span>`;
   } else {
-    // 否则只高亮关键字：找到 / 发现 / 指向 / Openclaw 版本
-    safeMessage = safeMessage.replace(/(找到|发现|指向|Openclaw 版本)/g, '<span class="log-accent">$1</span>');
+    // 否则只高亮关键字：找到 / 指向 / Openclaw 版本（去掉"发现"的高亮）
+    safeMessage = safeMessage.replace(/(找到|指向|Openclaw 版本)/g, '<span class="log-accent">$1</span>');
   }
 
   logEntry.innerHTML = `
