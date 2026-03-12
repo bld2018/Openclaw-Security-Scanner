@@ -81,12 +81,16 @@ function addTerminalLog(message, type = 'info') {
 
   const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
   let safeMessage = escapeHtml(String(message ?? ''));
+  
+  // 支持 **text** 语法实现加粗效果（在转义后处理）
+  safeMessage = safeMessage.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  
   // 如果是 Openclaw 相关信息，整条消息用橙色高亮
   if (/openclaw/i.test(safeMessage)) {
     safeMessage = `<span class="log-accent">${safeMessage}</span>`;
   } else {
-    // 否则只高亮关键字：找到 / 指向 / Openclaw 版本（去掉"发现"的高亮）
-    safeMessage = safeMessage.replace(/(找到|指向|Openclaw 版本)/g, '<span class="log-accent">$1</span>');
+    // 只高亮关键字：指向 / Openclaw 版本（去掉"找到"和"发现"的高亮）
+    safeMessage = safeMessage.replace(/(指向|Openclaw 版本)/g, '<span class="log-accent">$1</span>');
   }
 
   logEntry.innerHTML = `
@@ -334,8 +338,6 @@ async function performScan() {
       addTerminalLog('  ✅ 命令已清除', 'success');
       addTerminalLog(`  ⚠️ 配置残留: ${cliInfo.configPath}`, 'warning');
       addTerminalLog('━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-    } else {
-      addTerminalLog('- Openclaw CLI: ✅ 已清除', 'success');
     }
 
     // 渲染风险列表
@@ -390,46 +392,98 @@ async function fixRisk() {
     btnUninstall.querySelector('span').textContent = '卸载中...';
 
     showWaitingIndicator();
-    addTerminalLog('========== 开始卸载 Openclaw ==========', 'warning');
+    
+    // 卸载开始 - ASCII框格式
+    addTerminalLog('', 'info');
+    addTerminalLog('┌──────────────────────────────────────────┐', 'warning');
+    addTerminalLog('│ 开始卸载 Openclaw                       │', 'warning');
+    addTerminalLog('└──────────────────────────────────────────┘', 'warning');
+    addTerminalLog('', 'info');
 
     if (!window.electronAPI || !window.electronAPI.fixRisk) {
       throw new Error('后端修复接口不可用');
     }
 
+    // 收集各步骤执行结果（包括0的情况）
+    const stepResults = {
+      processes: { count: 0, success: false },
+      app: { success: false },
+      config: { count: 0, success: false },
+      services: { count: 0, success: false }
+    };
+
     // 步骤1: 终止进程（必须先终止进程才能卸载）
-    addTerminalLog('步骤1: 终止 Openclaw 进程...', 'info');
+    addTerminalLog('**步骤1: 终止 Openclaw 进程...**', 'info');
     try {
       const killResult = await window.electronAPI.fixRisk('kill_processes');
+      // 输出详细的执行日志
+      if (killResult && killResult.logs && killResult.logs.length > 0) {
+        killResult.logs.forEach(log => {
+          addTerminalLog('  ' + log, 'info');
+        });
+      }
       if (killResult && killResult.success) {
-        addTerminalLog(`  ✓ 已终止 ${killResult.killed || 0} 个进程`, 'success');
+        stepResults.processes.count = killResult.killed || 0;
+        stepResults.processes.success = true;
+        addTerminalLog(`  ✓ 已终止 ${stepResults.processes.count} 个进程`, 'success');
       } else {
-        addTerminalLog('  ⚠ 无进程或终止失败', 'warning');
+        stepResults.processes.count = 0;
+        addTerminalLog('  ✓ 未发现运行中的进程', 'success');
       }
     } catch (e) {
+      stepResults.processes.count = 0;
       addTerminalLog('  ⚠ 终止进程异常: ' + e.message, 'warning');
     }
 
     // 步骤2: 卸载应用（包括 CLI）
-    addTerminalLog('步骤2: 卸载 Openclaw 应用...', 'info');
+    addTerminalLog('**步骤2: 卸载 Openclaw 应用...**', 'info');
     try {
       const uninstallResult = await window.electronAPI.fixRisk('uninstall_app');
       if (uninstallResult && uninstallResult.success) {
-        addTerminalLog('  ✓ 已卸载应用程序', 'success');
+        stepResults.app.success = true;
+        stepResults.app.appFound = uninstallResult.appFound !== false; // 默认为true，除非明确指定false
+        // 输出CLI卸载日志
+        if (uninstallResult.logs && uninstallResult.logs.length > 0) {
+          addTerminalLog('  CLI卸载日志:', 'info');
+          uninstallResult.logs.forEach(log => {
+            addTerminalLog('    ' + log, 'info');
+          });
+        }
       } else {
+        stepResults.app.success = false;
+        stepResults.app.appFound = uninstallResult?.appFound !== false; // 默认为true，除非明确指定false
         const errorMsg = uninstallResult?.error || '未知错误';
         addTerminalLog('  ⚠ 卸载: ' + errorMsg, 'warning');
+        // 即使失败也输出日志
+        if (uninstallResult.logs && uninstallResult.logs.length > 0) {
+          addTerminalLog('  卸载日志:', 'info');
+          uninstallResult.logs.forEach(log => {
+            addTerminalLog('    ' + log, 'info');
+          });
+        }
       }
     } catch (e) {
+      stepResults.app.success = false;
+      stepResults.app.appFound = true; // 异常情况下默认为找到应用
       addTerminalLog('  ⚠ 卸载异常: ' + e.message, 'warning');
     }
 
     // 步骤3: 扫描并清理配置文件
-    addTerminalLog('步骤3: 扫描 Openclaw 配置文件...', 'info');
+    addTerminalLog('**步骤3: 扫描 Openclaw 配置文件...**', 'info');
     try {
       const cleanupResult = await window.electronAPI.fixRisk('cleanup_files');
       
+      // 输出扫描和清理日志
+      if (cleanupResult.logs && cleanupResult.logs.length > 0) {
+        cleanupResult.logs.forEach(log => {
+          addTerminalLog('  ' + log, 'info');
+        });
+      }
+      
       if (cleanupResult && cleanupResult.success) {
-        if (cleanupResult.cleaned && cleanupResult.cleaned.length > 0) {
+        stepResults.config.success = true;
+        stepResults.config.count = cleanupResult.cleaned ? cleanupResult.cleaned.length : 0;
+        if (stepResults.config.count > 0) {
           addTerminalLog('  ✓ 已删除以下路径:', 'success');
           cleanupResult.cleaned.forEach(item => {
             addTerminalLog(`    📁 ${item}`, 'info');
@@ -438,36 +492,75 @@ async function fixRisk() {
           addTerminalLog('  ✓ 未发现配置文件', 'success');
         }
       } else {
+        stepResults.config.success = false;
+        stepResults.config.count = 0;
         addTerminalLog('  ✗ 清理配置失败: ' + (cleanupResult?.error || '未知错误'), 'error');
         if (cleanupResult?.configStillExists) {
-          addTerminalLog('  ✗ 配置残留仍然存在！', 'error');
+          addTerminalLog('  ✓ 配置残留仍然存在！', 'error');
         }
       }
     } catch (e) {
+      stepResults.config.success = false;
+      stepResults.config.count = 0;
       addTerminalLog('  ✗ 清理配置异常: ' + e.message, 'error');
     }
 
     // 步骤4: 清理系统服务（可选）
+    let servicesRemoved = 0;
     const doCleanupServices = confirm('Openclaw 核心组件已卸载。\n\n是否同时清除所有 Openclaw 相关的系统服务和启动项？\n（建议：仅在确认不再使用时选择）');
     if (doCleanupServices) {
-      addTerminalLog('步骤4: 清理系统服务...', 'info');
+      addTerminalLog('**步骤4: 清理系统服务...**', 'info');
       try {
         const serviceResult = await window.electronAPI.fixRisk('remove_services');
         if (serviceResult && serviceResult.success) {
-          addTerminalLog('  ✓ 已移除相关系统服务', 'success');
+          stepResults.services.success = true;
+          stepResults.services.count = (serviceResult.removed?.length || 0) + (serviceResult.removedFiles?.length || 0);
+          servicesRemoved = stepResults.services.count;
+          if (servicesRemoved > 0) {
+            addTerminalLog(`  ✓ 已移除 ${servicesRemoved} 个服务/启动项`, 'success');
+          } else {
+            addTerminalLog('  ✓ 未发现 Openclaw 系统服务', 'success');
+          }
         } else {
+          stepResults.services.success = false;
+          stepResults.services.count = 0;
           addTerminalLog('  ⚠ 移除服务: ' + (serviceResult?.error || '无系统服务或移除失败'), 'warning');
         }
       } catch (e) {
+        stepResults.services.success = false;
+        stepResults.services.count = 0;
         addTerminalLog('  ⚠ 移除服务异常: ' + e.message, 'warning');
       }
     } else {
+      stepResults.services.success = false;
+      stepResults.services.count = 0;
       addTerminalLog('用户选择保留 Openclaw 系统服务', 'info');
     }
 
     hideWaitingIndicator();
 
-    addTerminalLog('========== 卸载流程完成 ==========', 'success');
+    // 卸载完成总结 - 统一ASCII大框（包含所有步骤结果，实事求是）
+    addTerminalLog('', 'info');
+    addTerminalLog('┌──────────────────────────────────────────┐', 'success');
+    addTerminalLog('│ 卸载流程完成                             │', 'success');
+    addTerminalLog('├──────────────────────────────────────────┤', 'success');
+    addTerminalLog(`│ 步骤1: 终止进程 ${stepResults.processes.count} 个                    │`, 'success');
+    // 步骤2: 根据是否找到应用显示不同内容
+    let step2Text = '│ 步骤2: 卸载应用 ';
+    if (stepResults.app.appFound === false) {
+      step2Text += '未安装相关应用        ';
+    } else if (stepResults.app.success) {
+      step2Text += '✓ 成功               ';
+    } else {
+      step2Text += '✗ 失败               ';
+    }
+    step2Text += '│';
+    addTerminalLog(step2Text, 'success');
+    addTerminalLog(`│ 步骤3: 清理配置 ${stepResults.config.count} 个                    │`, 'success');
+    if (doCleanupServices) {
+      addTerminalLog(`│ 步骤4: 服务移除 ${stepResults.services.count} 个                    │`, 'success');
+    }
+    addTerminalLog('└──────────────────────────────────────────┘', 'success');
 
     // 更新安全状态
     updateSecurityStatus(100, 'safe');

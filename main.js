@@ -1,6 +1,6 @@
 const electron = require('electron');
 if (!electron || typeof electron === 'string') {
-  // 当 Electron 以 “run as node” 模式启动时，require('electron') 会变成可执行文件路径字符串
+  // 当 Electron 以 "run as node" 模式启动时，require('electron') 会变成可执行文件路径字符串
   // 这会导致 app/ipcMain 等 API 不存在，程序必然崩溃。直接给出清晰提示。
   // 常见原因：环境变量 ELECTRON_RUN_AS_NODE=1
   console.error('Electron API 不可用：请使用 `npm start` 启动（不要用 node 直接运行 main.js）。');
@@ -90,7 +90,7 @@ function sleep(ms) {
 }
 
 function sleepSync(ms) {
-  // 避免 busy-wait，占用 CPU，同时保持同步流程（用于“杀进程后再验证”）
+  // 避免 busy-wait，占用 CPU，同时保持同步流程（用于"杀进程后再验证"）
   try {
     const sab = new SharedArrayBuffer(4);
     const int32 = new Int32Array(sab);
@@ -439,12 +439,13 @@ function findProcessRoot(pid) {
 
 // 终止Openclaw进程（智能版本：找到并终止根进程）
 function killOpenclawProcesses() {
+  const logs = [];
   try {
-    log.info('开始终止Openclaw进程...');
+    logs.push('开始终止Openclaw进程...');
     
     // 获取当前进程 PID，避免误杀自己
     const currentPid = process.pid;
-    log.info(`当前进程 PID: ${currentPid}`);
+    logs.push(`当前进程 PID: ${currentPid}`);
     
     // 首先获取 Openclaw 相关进程列表
     let targetPids = [];
@@ -464,21 +465,21 @@ function killOpenclawProcesses() {
         if (pid !== currentPid && !isNaN(pid)) {
           targetPids.push(pid);
           targetCommands[pid] = comm;
-          log.info(`  发现目标进程: PID=${pid}, 命令=${comm}`);
+          logs.push(`  发现目标进程: PID=${pid}, 命令=${comm}`);
         }
       }
     } catch (e) {
-      log.info('未发现 Openclaw 进程');
-      return { success: true, killed: 0, message: '没有发现运行的进程' };
+      logs.push('未发现 Openclaw 进程');
+      return { success: true, killed: 0, message: '没有发现运行的进程', logs };
     }
     
     if (targetPids.length === 0) {
-      log.info('没有需要终止的进程');
-      return { success: true, killed: 0, message: '没有发现运行的进程' };
+      logs.push('未发现 Openclaw 进程');
+      return { success: true, killed: 0, message: '没有发现运行的进程', logs };
     }
     
     // 找到所有根进程（去重）
-    log.info('查找进程树的根进程...');
+    logs.push('查找进程树的根进程...');
     const rootPids = [];
     const rootPidMap = {};
     
@@ -491,17 +492,17 @@ function killOpenclawProcesses() {
     }
     
     // 显示找到的根进程
-    log.info(`找到 ${rootPids.length} 个根进程:`);
+    logs.push(`找到 ${rootPids.length} 个根进程:`);
     for (const rootPid of rootPids) {
       const originalPid = rootPidMap[rootPid];
       const command = targetCommands[originalPid] || '未知命令';
-      log.info(`  根进程 PID=${rootPid}, 来自子进程 ${originalPid}: ${command}`);
+      logs.push(`  根进程 PID=${rootPid}, 来自子进程 ${originalPid}: ${command}`);
       
       // 获取根进程的详细信息
       try {
         const commResult = safeExecFile('ps', ['-p', rootPid.toString(), '-o', 'comm='], { timeout: 3000 });
         const fullComm = commResult.trim();
-        log.info(`    主程序: ${fullComm}`);
+        logs.push(`    主程序: ${fullComm}`);
       } catch (e) {
         // 忽略
       }
@@ -515,16 +516,16 @@ function killOpenclawProcesses() {
       try {
         // 先尝试温和终止
         process.kill(rootPid, 'SIGTERM');
-        log.info(`  已发送终止信号到根进程 ${rootPid}`);
+        logs.push(`  已发送终止信号到根进程 ${rootPid}`);
         killedCount++;
       } catch (e) {
         // 如果温和终止失败，尝试强制终止
         try {
           process.kill(rootPid, 'SIGKILL');
-          log.info(`  已强制终止根进程 ${rootPid}`);
+          logs.push(`  已强制终止根进程 ${rootPid}`);
           killedCount++;
         } catch (e2) {
-          log.warn(`  无法终止根进程 ${rootPid}`);
+          logs.push(`  无法终止根进程 ${rootPid}`);
         }
       }
     }
@@ -551,19 +552,20 @@ function killOpenclawProcesses() {
     }
     
     if (remainingCount === 0) {
-      log.info(`成功终止所有 Openclaw 进程 (${killedCount} 个根进程)`);
-      return { success: true, killed: killedCount };
+      logs.push(`成功终止所有 Openclaw 进程 (${killedCount} 个根进程)`);
+      return { success: true, killed: killedCount, logs };
     } else {
-      log.warn(`仍有 ${remainingCount} 个子进程在运行`);
+      logs.push(`仍有 ${remainingCount} 个子进程在运行`);
       return { 
         success: true,
         killed: killedCount,
-        warning: `仍有 ${remainingCount} 个子进程在运行，可能需要管理员权限`
+        warning: `仍有 ${remainingCount} 个子进程在运行，可能需要管理员权限`,
+        logs
       };
     }
   } catch (error) {
-    log.error('终止进程失败:', error);
-    return { success: false, error: error.message };
+    logs.push('终止进程失败: ' + error.message);
+    return { success: false, error: error.message, logs };
   }
 }
 
@@ -634,7 +636,7 @@ function removeOpenclawServices() {
           const parts = line.trim().split(/\s+/);
           if (parts.length > 2) {
             const serviceId = parts[2];
-            // 注：launchctl unload 通常需要 plist 路径；这里尽量做“最小破坏”处理
+            // 注：launchctl unload 通常需要 plist 路径；这里尽量做"最小破坏"处理
             safeExecFile('launchctl', ['remove', serviceId], { timeout: 3000, stdio: 'ignore' });
             removedServices.push(serviceId);
           }
@@ -646,12 +648,19 @@ function removeOpenclawServices() {
     
     // 移除登录项
     try {
-      safeExecFile(
+      const loginItems = safeExecFile(
         'osascript',
-        ['-e', 'tell application "System Events" to delete every login item whose name contains "Openclaw"'],
-        { timeout: 10000, stdio: 'ignore' }
+        ['-e', 'tell application "System Events" to get the name of every login item'],
+        { timeout: 5000 }
       );
-      removedServices.push('login_item');
+      if (loginItems.toLowerCase().includes('openclaw')) {
+        safeExecFile(
+          'osascript',
+          ['-e', 'tell application "System Events" to delete every login item whose name contains "Openclaw"'],
+          { timeout: 10000, stdio: 'ignore' }
+        );
+        removedServices.push('login_item');
+      }
     } catch (e) {
       // 忽略错误
     }
@@ -692,7 +701,7 @@ function removeOpenclawServices() {
       }
     }
     
-    log.info(`[✓] 已移除 ${removedServices.length} 个服务，删除 ${removedFiles.length} 个启动文件`);
+    // 返回结果（由renderer.js统一输出）
     return { success: true, removed: removedServices, removedFiles };
   } catch (error) {
     log.error('移除系统服务失败:', error);
@@ -840,7 +849,8 @@ function findOpenclawInNpmCache() {
 // 按官方脚本逻辑卸载 Openclaw CLI（全局命令 + npm 包 + 缓存）
 async function uninstallOpenclawCli() {
   try {
-    log.info('========== 开始卸载 Openclaw CLI ==========');
+    const logs = [];
+    logs.push('========== 开始卸载 Openclaw CLI ==========');
 
     // 1. 先通过 which 找到 openclaw 命令的实际路径
     let cliPaths = [];
@@ -849,14 +859,14 @@ async function uninstallOpenclawCli() {
       if (whichResult && whichResult.toString().trim()) {
         const foundPath = whichResult.toString().trim();
         cliPaths.push(foundPath);
-        log.info('[✓] which 找到 openclaw:', foundPath);
+        logs.push('[✓] which 找到 openclaw:' + foundPath);
       }
     } catch (e) {
-      log.info('[i] which openclaw 未找到命令');
+      logs.push('[i] which openclaw 未找到命令');
     }
 
     // 2. 扫描所有 npm 全局 bin 目录
-    log.info('[i] 扫描 npm 全局 bin 目录...');
+    logs.push('[i] 扫描 npm 全局 bin 目录...');
     const binDirs = getNpmGlobalBinDirs();
     let foundAnyFile = false;
     
@@ -865,14 +875,16 @@ async function uninstallOpenclawCli() {
       for (const f of files) {
         if (!cliPaths.includes(f.path)) {
           cliPaths.push(f.path);
-          log.info(`[✓] 在 ${dir} 找到: ${path.basename(f.path)}`);
+          logs.push(`[✓] 在 ${dir} 找到: ${path.basename(f.path)}`);
           foundAnyFile = true;
         }
       }
     }
     
     if (!foundAnyFile) {
-      log.info('[✓] 未找到 Openclaw 相关文件');
+      logs.push(`[✓] 扫描了 ${binDirs.length} 个目录，未找到 Openclaw 相关文件`);
+    } else {
+      logs.push(`[i] 共扫描 ${binDirs.length} 个目录`);
     }
 
     // 3. 删除所有找到的 CLI 文件
@@ -887,7 +899,7 @@ async function uninstallOpenclawCli() {
         
         if (stat.isSymbolicLink()) {
           const realPath = fs.readlinkSync(cliPath);
-          log.info(`    软链接指向: ${realPath}`);
+          logs.push(`    软链接指向: ${realPath}`);
         }
         
         // 尝试直接删除
@@ -897,28 +909,28 @@ async function uninstallOpenclawCli() {
           } else {
             fs.unlinkSync(cliPath);
           }
-          log.info(`    ✓ 已删除: ${cliPath}`);
+          logs.push(`    ✓ 已删除: ${cliPath}`);
           deletedCount++;
         } catch (e) {
           // 权限不足，记录下来稍后用 sudo 删除
-          log.info(`    需要管理员权限: ${cliPath}`);
+          logs.push(`    需要管理员权限: ${cliPath}`);
           needSudo.push(cliPath);
         }
       } catch (e) {
-        log.warn(`    处理失败: ${cliPath}`, e.message);
+        logs.push(`    处理失败: ${cliPath} - ${e.message}`);
       }
     }
 
     // 输出删除结果
     if (deletedCount > 0 || needSudo.length > 0) {
-      log.info(`[✓] 已删除 ${deletedCount} 个 CLI 文件`);
+      logs.push(`[✓] 已删除 ${deletedCount} 个 CLI 文件`);
     } else if (cliPaths.length === 0) {
-      log.info('[✓] 未找到 Openclaw CLI 文件');
+      logs.push('[✓] 未找到 Openclaw CLI 文件');
     }
 
     // 4. 使用 sudo 删除需要权限的文件
     if (needSudo.length > 0) {
-      log.info(`[i] 需要管理员权限删除 ${needSudo.length} 个文件，将弹出密码框...`);
+      logs.push(`[i] 需要管理员权限删除 ${needSudo.length} 个文件，将弹出密码框...`);
       for (const p of needSudo) {
         const result = await deleteWithSudo(p);
         if (result.success) {
@@ -928,7 +940,7 @@ async function uninstallOpenclawCli() {
     }
 
     // 5. 尝试卸载 npm 包
-    log.info('[i] 尝试卸载 npm 全局包...');
+    logs.push('[i] 尝试卸载 npm 全局包...');
     const pkgNames = ['openclaw-cn', 'openclaw', '@qingchencloud/openclaw-zh', '@openclaw/openclaw'];
     let uninstalledAny = false;
     
@@ -939,7 +951,7 @@ async function uninstallOpenclawCli() {
         if (listResult.includes(name)) {
           // 包存在，执行卸载
           safeExecFile('npm', ['uninstall', '-g', name], { timeout: 15000 });
-          log.info(`    ✓ 已卸载 npm 包: ${name}`);
+          logs.push(`    ✓ 已卸载 npm 包: ${name}`);
           uninstalledAny = true;
         }
       } catch (e) {
@@ -948,13 +960,13 @@ async function uninstallOpenclawCli() {
     }
     
     if (uninstalledAny) {
-      log.info('[✓] 已卸载 npm 全局包');
+      logs.push('[✓] 已卸载 npm 全局包');
     } else {
-      log.info('[✓] 未找到 Openclaw npm 包');
+      logs.push('[✓] 未找到 Openclaw npm 包');
     }
 
     // 6. 查找并删除 npm 全局 node_modules 中的 openclaw 目录
-    log.info('[i] 清理 npm 全局 node_modules...');
+    logs.push('[i] 清理 npm 全局 node_modules...');
     let cleanedAny = false;
     try {
       const npmRoot = safeExecFile('npm', ['root', '-g'], { timeout: 5000 });
@@ -972,7 +984,7 @@ async function uninstallOpenclawCli() {
             try {
               fs.rmSync(pkgDir, { recursive: true, force: true });
               cleanedAny = true;
-              log.info(`    ✓ 已删除: ${pkgDir}`);
+              logs.push(`    ✓ 已删除: ${pkgDir}`);
               deletedCount++;
             } catch (e) {
               // 尝试 sudo
@@ -983,32 +995,31 @@ async function uninstallOpenclawCli() {
         }
       }
     } catch (e) {
-      log.warn('    清理 npm modules 失败:', e.message);
+      logs.push('    清理 npm modules 失败:' + e.message);
     }
     
     if (cleanedAny) {
-      log.info('[✓] 已删除 npm 全局模块中的 Openclaw 目录');
+      logs.push('[✓] 已删除 npm 全局模块中的 Openclaw 目录');
     } else {
-      log.info('[✓] 未找到 Openclaw 全局模块');
+      logs.push('[✓] 未找到 Openclaw 全局模块');
     }
 
     // 7. 清理 npm 缓存中的 openclaw 相关内容
-    log.info('[i] 清理 npm 缓存...');
+    logs.push('[i] 清理 npm 缓存...');
     try {
       safeExecFile('npm', ['cache', 'clean', '--force'], { timeout: 30000 });
-      log.info('    ✓ npm 缓存清理完成');
     } catch (e) {
-      log.warn('    npm 缓存清理失败:', e.message);
+      logs.push('    npm 缓存清理失败:' + e.message);
     }
 
     // 8. 查找并清理缓存目录中的 openclaw 文件
     const cacheFiles = findOpenclawInNpmCache();
     if (cacheFiles.length > 0) {
-      log.info(`[i] 找到 ${cacheFiles.length} 个缓存文件需要清理`);
+      logs.push(`[i] 找到 ${cacheFiles.length} 个缓存文件需要清理`);
       for (const cf of cacheFiles.slice(0, 20)) { // 限制数量避免太慢
         try {
           fs.unlinkSync(cf);
-          log.info(`    ✓ 已删除缓存: ${path.basename(cf)}`);
+          logs.push(`    ✓ 已删除缓存: ${path.basename(cf)}`);
         } catch (e) {
           // 忽略
         }
@@ -1016,7 +1027,7 @@ async function uninstallOpenclawCli() {
     }
 
     // 9. 清理 NVM 中的 openclaw（如果存在）
-    log.info('[i] 检查 NVM 目录...');
+    logs.push('[i] 检查 NVM 目录...');
     try {
       const nvmDir = process.env.NVM_DIR || path.join(process.env.HOME, '.nvm');
       const versionsDir = path.join(nvmDir, 'versions', 'node');
@@ -1033,7 +1044,7 @@ async function uninstallOpenclawCli() {
             if (fs.existsSync(pkgDir)) {
               try {
                 fs.rmSync(pkgDir, { recursive: true, force: true });
-                log.info(`    ✓ 已删除 NVM 包: ${pkgDir}`);
+                logs.push(`    ✓ 已删除 NVM 包: ${pkgDir}`);
                 deletedCount++;
               } catch (e) {
                 await deleteWithSudo(pkgDir);
@@ -1044,7 +1055,7 @@ async function uninstallOpenclawCli() {
         }
       }
     } catch (e) {
-      log.warn('    检查 NVM 目录失败:', e.message);
+      logs.push('    检查 NVM 目录失败:' + e.message);
     }
 
     // 10. 最终验证
@@ -1060,25 +1071,18 @@ async function uninstallOpenclawCli() {
       // which 抛错表示命令不存在
     }
 
-    log.info('========== CLI 卸载完成 ==========');
-    log.info(`删除文件数: ${deletedCount}`);
-    
-    if (stillExists) {
-      log.warn(`[!] 警告: 系统中仍存在 openclaw 命令: ${remainingPath}`);
-      log.warn('[!] 可能需要重启终端或检查 PATH 环境变量');
-    } else {
-      log.info('[✓] openclaw CLI 已完全卸载');
-    }
+    // 返回结果（由renderer.js统一输出）
+    logs.push(`CLI卸载结果: 删除${deletedCount}个文件, ${stillExists ? '仍有残留' : '完全卸载'}`);
 
     return {
       success: !stillExists,
       stillExists,
       remainingPath,
       deletedCount,
+      logs
     };
   } catch (error) {
-    log.error('卸载 Openclaw CLI 过程出错:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message, logs: [] };
   }
 }
 
@@ -1155,9 +1159,9 @@ function scanOpenclawCli() {
     }
     
     if (foundAnyFile) {
-      log.info('[✓] 已找到 Openclaw 相关文件');
+      log.info(`[✓] 已找到 Openclaw 相关文件（扫描 ${binDirs.length} 个目录）`);
     } else {
-      log.info('[✓] 未找到 Openclaw 相关文件');
+      log.info(`[✓] 扫描了 ${binDirs.length} 个目录，未找到 Openclaw 相关文件`);
     }
 
     // 4. npm 包检查: npm list -g --depth=0 | grep openclaw
@@ -1255,7 +1259,8 @@ async function uninstallWithSudo(appPath) {
 // 卸载Openclaw应用
 async function uninstallOpenclawApp() {
   try {
-    log.info('开始卸载Openclaw应用...');
+    const logs = [];
+    logs.push('开始卸载Openclaw应用...');
     
     // 先终止进程
     killOpenclawProcesses();
@@ -1266,24 +1271,34 @@ async function uninstallOpenclawApp() {
     // 检查安装状态
     const installInfo = checkOpenclawInstalled();
     if (!installInfo.installed || !installInfo.path) {
-      log.info('未找到Openclaw安装路径，可能已经卸载，仅执行 CLI 卸载逻辑');
-      const cliResult = uninstallOpenclawCli();
+      const cliResult = await uninstallOpenclawCli();
+      
+      // 输出CLI卸载日志
+      if (cliResult.logs && cliResult.logs.length > 0) {
+        cliResult.logs.forEach(log => {
+          logs.push(log);
+        });
+      }
 
       if (cliResult.success) {
         return {
           success: true,
+          appFound: false,
           message: '未检测到桌面应用，仅卸载了 Openclaw CLI（命令与 npm 包）',
+          logs
         };
       }
 
       return {
         success: false,
+        appFound: false,
         error: '未检测到桌面应用，且 CLI 卸载可能失败，请查看日志并手动检查 /opt/homebrew/bin/openclaw',
+        logs
       };
     }
     
     const appPath = installInfo.path;
-    log.info(`目标应用路径: ${appPath}`);
+    logs.push(`目标应用路径: ${appPath}`);
     
     // 尝试普通删除
     let deleteSuccess = false;
@@ -1296,21 +1311,22 @@ async function uninstallOpenclawApp() {
       
       if (!verifyInfo.installed) {
         deleteSuccess = true;
-        log.info('普通删除成功');
+        logs.push('普通删除成功');
       }
     } catch (error) {
-      log.info('普通删除失败，需要管理员权限');
+      logs.push('普通删除失败，需要管理员权限');
     }
     
     // 如果普通删除失败，使用 sudo
     if (!deleteSuccess) {
-      log.info('尝试使用管理员权限删除...');
+      logs.push('尝试使用管理员权限删除...');
       const sudoResult = await uninstallWithSudo(appPath);
       
       if (!sudoResult.success) {
         return { 
           success: false, 
-          error: sudoResult.error || '需要管理员权限，请输入密码确认卸载'
+          error: sudoResult.error || '需要管理员权限，请输入密码确认卸载',
+          logs
         };
       }
     }
@@ -1322,34 +1338,46 @@ async function uninstallOpenclawApp() {
     const verifyInfo = checkOpenclawInstalled();
     
     // 额外执行 CLI 卸载逻辑（全局命令 + npm 包 + 缓存）
-    const cliResult = uninstallOpenclawCli();
+    const cliResult = await uninstallOpenclawCli();
+    
+    // 输出CLI卸载日志
+    if (cliResult.logs && cliResult.logs.length > 0) {
+      cliResult.logs.forEach(log => {
+        logs.push(log);
+      });
+    }
 
     if (!verifyInfo.installed && cliResult.success) {
-      log.info('Openclaw 应用与 CLI 均已成功卸载');
-      return { success: true, message: 'Openclaw 应用与 CLI 已成功卸载' };
+      logs.push('Openclaw 应用与 CLI 均已成功卸载');
+      return { success: true, appFound: true, message: 'Openclaw 应用与 CLI 已成功卸载', logs };
     }
 
     if (verifyInfo.installed) {
       return { 
-        success: false, 
-        error: '卸载验证失败，Openclaw应用可能仍然存在，请手动删除'
+        success: false,
+        appFound: true, 
+        error: '卸载验证失败，Openclaw应用可能仍然存在，请手动删除',
+        logs
       };
     }
 
     if (!cliResult.success && cliResult.stillExists) {
       return {
         success: false,
+        appFound: true,
         error: 'Openclaw CLI 可能仍然存在，请根据日志提示手动删除 openclaw 命令',
+        logs
       };
     }
 
     return {
       success: true,
+      appFound: true,
       message: 'Openclaw 应用已卸载，CLI 卸载过程可能部分失败，请查看日志确认',
+      logs
     };
   } catch (error) {
-    log.error('卸载Openclaw应用失败:', error);
-    return { success: false, error: '卸载过程出错: ' + error.message };
+    return { success: false, error: '卸载过程出错: ' + error.message, logs: [] };
   }
 }
 
@@ -1360,7 +1388,8 @@ function scanOpenclawPaths() {
     directories: [],
     files: [],
     configDir: null,
-    backupDirs: []  // 新增：专门记录备份目录
+    backupDirs: [],  // 新增：专门记录备份目录
+    logs: []
   };
   
   // 需要检查的路径列表（全面覆盖）
@@ -1400,20 +1429,20 @@ function scanOpenclawPaths() {
           if (p.includes('.openclaw') && p.includes(homeDir) && !p.includes('backup')) {
             foundPaths.configDir = p;
           }
-          log.info(`扫描到目录: ${p}`);
+          foundPaths.logs.push(`扫描到目录: ${p}`);
         } else {
           foundPaths.files.push(p);
-          log.info(`扫描到文件: ${p}`);
+          foundPaths.logs.push(`扫描到文件: ${p}`);
         }
       }
     } catch (e) {
-      log.warn(`扫描路径失败: ${p} - ${e.message}`);
+      foundPaths.logs.push(`扫描路径失败: ${p} - ${e.message}`);
     }
   }
   
   // 扫描备份目录（包括所有 openclaw-backup、openclaw-autoclaw、openclaw.backup 等）
   try {
-    log.info('开始扫描备份目录...');
+    foundPaths.logs.push('开始扫描备份目录...');
     // 使用 find 命令扫描所有备份目录
     const backupDirs = safeExecFile('find', [homeDir, '-maxdepth', '2', '-name', '.openclaw*', '-type', 'd'], { timeout: 5000 });
     if (backupDirs && backupDirs.trim()) {
@@ -1425,14 +1454,14 @@ function scanOpenclawPaths() {
             !dir.endsWith('.Openclaw')) {
           foundPaths.directories.push(dir);
           foundPaths.backupDirs.push(dir);
-          log.info(`扫描到备份目录: ${dir}`);
+          foundPaths.logs.push(`扫描到备份目录: ${dir}`);
         }
       }
     } else {
-      log.info('未找到备份目录');
+      foundPaths.logs.push('未找到备份目录');
     }
   } catch (e) {
-    log.warn('扫描备份目录失败:', e.message);
+    foundPaths.logs.push('扫描备份目录失败:' + e.message);
   }
   
   // 扫描偏好设置文件
@@ -1445,12 +1474,12 @@ function scanOpenclawPaths() {
             !file.includes('openclaw-security-scanner')) {
           const fullPath = path.join(prefsDir, file);
           foundPaths.files.push(fullPath);
-          log.info(`扫描到偏好设置: ${fullPath}`);
+          foundPaths.logs.push(`扫描到偏好设置: ${fullPath}`);
         }
       }
     }
   } catch (e) {
-    log.warn('扫描偏好设置失败:', e.message);
+    foundPaths.logs.push('扫描偏好设置失败:' + e.message);
   }
   
   // 扫描 WebKit 目录
@@ -1462,12 +1491,12 @@ function scanOpenclawPaths() {
         if (file.toLowerCase().includes('openclaw') && !file.includes('openclaw-security-scanner')) {
           const fullPath = path.join(webkitDir, file);
           foundPaths.directories.push(fullPath);
-          log.info(`扫描到 WebKit 数据: ${fullPath}`);
+          foundPaths.logs.push(`扫描到 WebKit 数据: ${fullPath}`);
         }
       }
     }
   } catch (e) {
-    log.warn('扫描 WebKit 目录失败:', e.message);
+    foundPaths.logs.push('扫描 WebKit 目录失败:' + e.message);
   }
   
   // 扫描 Saved Application State
@@ -1479,17 +1508,17 @@ function scanOpenclawPaths() {
         if (file.toLowerCase().includes('openclaw') && !file.includes('openclaw-security-scanner')) {
           const fullPath = path.join(stateDir, file);
           foundPaths.directories.push(fullPath);
-          log.info(`扫描到应用状态: ${fullPath}`);
+          foundPaths.logs.push(`扫描到应用状态: ${fullPath}`);
         }
       }
     }
   } catch (e) {
-    log.warn('扫描应用状态失败:', e.message);
+    foundPaths.logs.push('扫描应用状态失败:' + e.message);
   }
   
-  log.info(`扫描完成: 发现 ${foundPaths.directories.length} 个目录, ${foundPaths.files.length} 个文件`);
+  foundPaths.logs.push(`扫描完成: 发现 ${foundPaths.directories.length} 个目录, ${foundPaths.files.length} 个文件`);
   if (foundPaths.backupDirs.length > 0) {
-    log.info(`其中备份目录: ${foundPaths.backupDirs.length} 个`);
+    foundPaths.logs.push(`其中备份目录: ${foundPaths.backupDirs.length} 个`);
   }
   return foundPaths;
 }
@@ -1640,20 +1669,26 @@ function deleteWithRmRf(paths) {
 // 清理残留文件（新版：先扫描，再使用命令删除）
 function cleanupResidualFiles() {
   try {
-    log.info('开始扫描 Openclaw 相关路径...');
+    const logs = [];
+    logs.push('开始扫描 Openclaw 相关路径...');
     
     // 步骤1: 扫描所有相关路径
     const pathsToDelete = scanOpenclawPaths();
     
+    // 添加扫描日志
+    if (pathsToDelete.logs && pathsToDelete.logs.length > 0) {
+      pathsToDelete.logs.forEach(log => logs.push(log));
+    }
+    
     if (pathsToDelete.directories.length === 0 && pathsToDelete.files.length === 0) {
-      log.info('未发现 Openclaw 相关路径，无需清理');
-      return { success: true, cleaned: [], message: '未发现需要清理的路径' };
+      logs.push('未发现 Openclaw 相关路径，无需清理');
+      return { success: true, cleaned: [], message: '未发现需要清理的路径', logs };
     }
     
     // 显示将要删除的路径
-    log.info(`发现 ${pathsToDelete.directories.length} 个目录和 ${pathsToDelete.files.length} 个文件需要删除`);
-    pathsToDelete.directories.forEach(p => log.info(`待删除目录: ${p}`));
-    pathsToDelete.files.forEach(p => log.info(`待删除文件: ${p}`));
+    logs.push(`发现 ${pathsToDelete.directories.length} 个目录和 ${pathsToDelete.files.length} 个文件需要删除`);
+    pathsToDelete.directories.forEach(p => logs.push(`待删除目录: ${p}`));
+    pathsToDelete.files.forEach(p => logs.push(`待删除文件: ${p}`));
     
     // 步骤2: 使用 rm -rf 命令删除所有路径
     const allPaths = [...pathsToDelete.directories, ...pathsToDelete.files];
@@ -1663,22 +1698,20 @@ function cleanupResidualFiles() {
     if (pathsToDelete.configDir) {
       const configExists = fs.existsSync(pathsToDelete.configDir);
       if (configExists) {
-        log.error(`验证失败: 配置目录仍然存在 - ${pathsToDelete.configDir}`);
+        logs.push(`验证失败: 配置目录仍然存在 - ${pathsToDelete.configDir}`);
         deleteResult.success = false;
         deleteResult.configStillExists = true;
         if (!deleteResult.error) {
           deleteResult.error = `配置目录删除失败: ${pathsToDelete.configDir}`;
         }
       } else {
-        log.info(`验证成功: 配置目录已删除 - ${pathsToDelete.configDir}`);
+        logs.push(`验证成功: 配置目录已删除 - ${pathsToDelete.configDir}`);
       }
     }
     
-    return deleteResult;
+    return { ...deleteResult, logs };
   } catch (error) {
-    log.error('清理残留文件失败:', error);
-    log.error('错误堆栈:', error.stack);
-    return { success: false, error: error.message, stack: error.stack };
+    return { success: false, error: error.message, stack: error.stack, logs: [] };
   }
 }
 
@@ -1774,7 +1807,7 @@ function checkOpenclawServices() {
     const services = [];
     
     // 1. 检查launchd服务
-    log.info('📋 步骤1: 扫描launchd服务...');
+    log.info('**步骤1: 扫描launchd服务...**');
     try {
       const launchdList = safeExecFile('launchctl', ['list'], { timeout: 3000 });
       const launchdResult = launchdList
@@ -1793,13 +1826,15 @@ function checkOpenclawServices() {
             level: 'critical'
           });
         });
+      } else {
+        log.info('✓ 未找到Openclaw launchd服务');
       }
     } catch (e) {
       log.info('✓ launchd服务扫描完成');
     }
     
     // 2. 检查登录项
-    log.info('📋 步骤2: 扫描登录项...');
+    log.info('**步骤2: 扫描登录项...**');
     try {
       const loginItems = safeExecFile(
         'osascript',
@@ -1815,6 +1850,8 @@ function checkOpenclawServices() {
           details: loginItems.trim(),
           level: 'critical'
         });
+      } else {
+        log.info('✓ 未找到Openclaw登录项');
       }
     } catch (e) {
       log.info('✓ 登录项扫描完成');
@@ -2051,23 +2088,23 @@ async function performScan() {
       log.info('开始扫描步骤...');
       
       // 步骤0: 获取系统信息
-      log.info('步骤0: 获取系统信息');
+      log.info('**步骤0: 获取系统信息**');
       const systemInfo = getSystemInfo();
       
       // 步骤1: 扫描 CLI 安装信息 (命令/npm包/配置)
-      log.info('步骤1: 扫描Openclaw CLI');
+      log.info('**步骤1: 扫描Openclaw CLI**');
       const cliInfo = scanOpenclawCli();
       
       // 步骤2: 扫描运行进程
-      log.info('步骤2: 扫描运行进程');
+      log.info('**步骤2: 扫描运行进程**');
       const processInfo = checkOpenclawRunning();
       
       // 步骤3: 检测网络连接和端口
-      log.info('步骤3: 检测网络连接');
+      log.info('**步骤3: 检测网络连接**');
       const networkInfo = checkOpenclawNetwork();
       
       // 步骤4: 检测系统服务
-      log.info('步骤4: 检测系统服务');
+      log.info('**步骤4: 检测系统服务**');
       const serviceInfo = checkOpenclawServices();
       
       // 分析风险
@@ -2201,7 +2238,14 @@ async function performScan() {
       const totalActualRisks = criticalRisks + warningRisks + infoRisks;
       
       // 极客风格日志输出（renderer.js会自动添加时间戳，这里不再重复）
-      const cliStatus = cliInfo.installed ? '❌ 已安装' : '✅ 已清除';
+      let cliStatus;
+      if (cliInfo.installed) {
+        cliStatus = '❌ 已安装';
+      } else if (cliInfo.configExists) {
+        cliStatus = '⚠️ 发现配置残留';
+      } else {
+        cliStatus = '未发现Openclaw CLI';
+      }
       
       log.info('┌──────────────────────────────────────────┐');
       log.info('│ 扫描完成                                 │');
@@ -2324,7 +2368,7 @@ ipcMain.handle('perform-scan', async () => {
 });
 
 ipcMain.handle('fix-risk', async (event, fixType) => {
-  log.info('执行修复:', fixType);
+  log.info('执行动作:', fixType);
   
   switch (fixType) {
     case 'kill_processes':
